@@ -1,0 +1,16 @@
+[package]
+name = "p2p-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+rand = "0.9.0"
+serde = { version = "1", features = ["derive"]}
+bincode = "1"
+chrono = "0.4.40"
+bs58 = "0.5.1"
+blake3 = "1.6.1"
+socket2 = "0.5.8"
+indicatif = "0.17.11"
+
