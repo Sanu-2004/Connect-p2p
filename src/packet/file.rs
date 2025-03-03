@@ -189,7 +189,6 @@ impl FilePacket {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&data);
         let hash = Some(hasher.finalize().to_string());
-        // let hash = None;
 
         FilePacket {
             filename,

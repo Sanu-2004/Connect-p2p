@@ -23,11 +23,9 @@ pub async fn get_public(socket: &UdpSocket) -> Result<SocketAddr, Box<dyn std::e
 }
 
 
-/// Resolves a hostname to an IPv4 STUN server address
 async fn resolve_stun_server() -> Option<SocketAddr> {
     let addrs = lookup_host(STUN_SERVER).await.unwrap();
     
-    // Pick the first IPv4 address, fallback to any available one
     for addr in addrs {
         if let SocketAddr::V6(_) = addr {
             return Some(addr);
@@ -60,7 +58,6 @@ fn create_stun_request() -> Vec<u8> {
     packet
 }
 
-/// Parses STUN response and extracts public IP
 fn parse_stun_response(response: &[u8]) -> Option<SocketAddr> {
     if response.len() < 28 {
         return None;
@@ -70,7 +67,6 @@ fn parse_stun_response(response: &[u8]) -> Option<SocketAddr> {
     // let attr_len = u16::from_be_bytes([response[22], response[23]]);
     // println!("Attr type: {}, Attr len: {}", attr_type, attr_len);
     
-    // Check if the attribute is XOR-MAPPED-ADDRESS (0x0020)
     if attr_type == 0x0020 {
         let family = response[25];
         let port = ((response[26] ^ response[4]) as u16) << 8 | (response[27] ^ response[5]) as u16;

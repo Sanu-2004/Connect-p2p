@@ -71,8 +71,18 @@ impl User {
     }
 
     fn display_members(&self) {
+        if self.connected.is_empty() {
+            println!("No Peer Connected");
+        }
         for peer in self.connected.iter() {
             println!("{} -> Port: {}", peer.get_name(), peer.get_port());
+        }
+    }
+
+    pub async fn disconnect_all(&self, socket: &UdpSocket) {
+        for i in self.connected.iter() {
+            let dis = Command::Disconnect(i.get_addr());
+            dis.handle_disconnect(&socket, self.get_name()).await;
         }
     }
 
@@ -85,7 +95,7 @@ impl User {
     ) {
         let cmd = buf.split_once(":");
         match cmd {
-            Some(("connect", addrstr)) => {
+            Some(("con", addrstr)) => {
                 if let Some(addr) = base58_to_addr(addrstr.trim().to_string()) {
                     let cnt = Command::Connect(addr);
                     cnt.handle_connect(&socket, self.get_name()).await;
@@ -93,7 +103,15 @@ impl User {
                     println!("Error parsing the ip addrs")
                 }
             }
-            Some(("members", _)) => self.display_members(),
+            Some(("dis", name)) => {
+                for i in self.connected.iter() {
+                    if i.get_name().to_lowercase() == name.trim().to_lowercase() {
+                        let dis = Command::Disconnect(i.get_addr());
+                        dis.handle_disconnect(&socket, self.get_name()).await;
+                    }
+                }
+            }
+            Some(("ls", _)) => self.display_members(),
 
             Some(("chat", _)) => {
                 let mut lock = user_lock.lock().await;
@@ -118,16 +136,20 @@ impl User {
                     path.push(i);
                 }
                 let cmd = Command::File(path);
-                // println!("{:?}", path);
                 if let Err(e) = cmd.read_file(socket, self, ack_rx).await {
                     println!("Error in File handeling, {}", e);
                 }
             },
+            Some(("help", _)) => handle_help(),
 
             Some(_) => println!("Not ImpleMented Yet"),
 
             None => {
                 if self.chat_on {
+                    if self.connected.is_empty() {
+                        println!("No peer Connected");
+                        return;
+                    }
                     let chat = Packet::chat_packet(self.get_name(), buf);
                     for peer in self.connected.iter() {
                         if let Err(e) = chat.send_packet(&socket, &peer.get_addr()).await {
@@ -141,6 +163,34 @@ impl User {
         }
     }
 }
+
+use crossterm::{
+    execute,
+    style::{Color, Print, ResetColor, SetForegroundColor},
+};
+
+pub fn handle_help() {
+    let help_text = r"
+Available Commands:
+  con:<address>      - Connect to a peer using base58 encoded address.
+  dis:<name>         - Disconnect from a connected peer.
+  ls:                - List all connected peers.
+  chat:              - Toggle chat mode ON/OFF.
+  file:<path>        - Send a file to connected peers (use 'path' inside quotes).
+  help:              - Show this help message.";
+
+    let mut stdout = std::io::stdout();
+    
+    execute!(
+        stdout,
+        SetForegroundColor(Color::Cyan),
+        Print(help_text),
+        ResetColor,
+    ).unwrap();
+
+    println!();
+}
+
 
 fn base58_to_addr(addr: String) -> Option<SocketAddr> {
     let (ip, port) = addr.split_once("/")?;

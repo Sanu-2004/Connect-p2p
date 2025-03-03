@@ -1,5 +1,5 @@
 [package]
-name = "p2p-rust"
+name = "connect-p2p"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,6 +11,6 @@ bincode = "1"
 chrono = "0.4.40"
 bs58 = "0.5.1"
 blake3 = "1.6.1"
-socket2 = "0.5.8"
 indicatif = "0.17.11"
+crossterm = "0.28.1"
 

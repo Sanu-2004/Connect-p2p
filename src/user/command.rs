@@ -13,13 +13,26 @@ const CHUNK_SIZE: usize = 59 * 1024;
 
 pub enum Command {
     Connect(SocketAddr),
+    Disconnect(SocketAddr),
     File(String),
 }
+
 
 impl Command {
     pub async fn handle_connect(&self, socket: &UdpSocket, name: String) {
         if let Command::Connect(addr) = self {
             let packet = Packet::create_binding_req(true, name);
+            if let Err(e) = packet.send_packet(socket, addr).await {
+                eprintln!("Error sending connection packet: {:?}", e);
+            }
+        } else {
+            eprintln!("Invalid command: Expected `Connect`");
+        }
+    }
+
+    pub async fn handle_disconnect(&self, socket: &UdpSocket, name: String) {
+        if let Command::Disconnect(addr) = self {
+            let packet = Packet::create_binding_req(false, name);
             if let Err(e) = packet.send_packet(socket, addr).await {
                 eprintln!("Error sending connection packet: {:?}", e);
             }
@@ -161,7 +174,6 @@ async fn handle_peer(
         let packet =
             Packet::create_file_packet(file_name.clone(), index, total_chunks, buf[..n].to_vec());
         packet.send_packet(socket, &addr).await?;
-        // println!("{}/{}", index, total_chunks);
         match timeout(Duration::from_secs(3), ack_rx.recv()).await {
             Ok(Ok(Some((pac, receiver_addr)))) => {
                 if let Packet::Ack(ack) = pac {
