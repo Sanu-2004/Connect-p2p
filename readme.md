@@ -107,4 +107,4 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Releases
-You can find the latest releases [here](https://github.com/your-repo/releases).
+You can find the latest releases [here](https://github.com/Sanu-2004/Connect-p2p/releases).
