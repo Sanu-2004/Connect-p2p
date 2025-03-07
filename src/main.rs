@@ -95,7 +95,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         match socket.recv_from(&mut buf).await {
             Ok((size, addr)) => {
-                println!("{}", String::from_utf8_lossy(&buf[..size]));
                 handle_message(
                     &socket,
                     user_lock.clone(),
