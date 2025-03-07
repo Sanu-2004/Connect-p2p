@@ -125,16 +125,24 @@ impl User {
             Some(("file", arg)) => {
                 let mut path = String::with_capacity(arg.len());
                 let mut flag = false;
+                let mut escape_char = false;
                 for i in arg.trim().chars() {
                     if i == '\'' || i == '\"' {
                         if !flag {
                             path.clear();
                             flag = true;
                         }
-                        continue;
+                        if !escape_char {
+                            escape_char = true;
+                            continue;
+                        }
+                    }
+                    else {
+                        escape_char = false;
                     }
                     path.push(i);
                 }
+                // println!("{}", path);
                 let cmd = Command::File(path);
                 if let Err(e) = cmd.read_file(socket, self, ack_rx).await {
                     println!("Error in File handeling, {}", e);

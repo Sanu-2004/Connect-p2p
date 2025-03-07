@@ -1,5 +1,7 @@
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
-use std::{collections::HashSet, fmt::Write, net::SocketAddr, path::Path, sync::Arc, time::Duration};
+use std::{
+    collections::HashSet, fmt::Write, net::SocketAddr, path::Path, sync::Arc, time::Duration,
+};
 use tokio::{
     fs::File,
     io::{AsyncReadExt, BufReader},
@@ -16,7 +18,6 @@ pub enum Command {
     Disconnect(SocketAddr),
     File(String),
 }
-
 
 impl Command {
     pub async fn handle_connect(&self, socket: &UdpSocket, name: String) {
@@ -74,6 +75,7 @@ impl Command {
 
         let packet = Packet::create_filemetadata(file_name.clone(), total_chunks);
         let mut interested_peer = HashSet::with_capacity(user.connected.len());
+        let mut tasks = Vec::with_capacity(user.connected.len());
 
         let user_clone = user.clone();
         for peer in user_clone.connected {
@@ -84,12 +86,44 @@ impl Command {
                 .await;
         }
 
+        let m = MultiProgress::new();
+        let sty = ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .unwrap()
+        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+        .progress_chars("#>-");
+
+        println!("waiting for peer to respond");
         loop {
             match timeout(Duration::from_secs(5), ack_rx.recv()).await {
                 Ok(Ok(Some((pac, addr)))) => {
                     if let Packet::MdRes(res) = pac {
                         if res.verify(&packet) {
-                            interested_peer.insert(addr);
+                            if interested_peer.insert(addr) {
+                                let socket_clone = socket.clone();
+                                let file_name_clone = file_name.clone();
+                                let path_clone = path.clone();
+                                let res_rx = ack_rx.resubscribe();
+                                let pb =
+                                    m.add(ProgressBar::new((total_chunks * CHUNK_SIZE) as u64));
+                                pb.set_style(sty.clone());
+                                pb.set_message( format!("{}", user.get_name()));
+                                let thread = tokio::spawn(async move {
+                                    if let Err(e) = handle_peer(
+                                        &socket_clone,
+                                        total_chunks,
+                                        file_name_clone,
+                                        path_clone,
+                                        addr,
+                                        res_rx,
+                                        pb,
+                                    )
+                                    .await
+                                    {
+                                        eprintln!("Err Sending file to peer, \n{}", e);
+                                    }
+                                });
+                                tasks.push(thread);
+                            }
                         }
                     }
                 }
@@ -99,53 +133,22 @@ impl Command {
                 break;
             }
         }
-
         if interested_peer.len() == 0 {
             println!("No Peer Responded");
-            return Ok(());
-        }
-        println!("total {} peer responded", interested_peer.len());
-        let mut tasks = vec![];
+        } else {
+            println!("Stop Reciving Response");
+            println!("total {} peer responded", interested_peer.len());
 
-        let m = MultiProgress::new();
-        let sty = ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-        .unwrap()
-        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
-        .progress_chars("#>-");
-
-        for i in interested_peer {
-            let socket_clone = socket.clone();
-            let file_name_clone = file_name.clone();
-            let path_clone = path.clone();
-            let res_rx = ack_rx.resubscribe();
-            let pb = m.add(ProgressBar::new((total_chunks*CHUNK_SIZE) as u64));
-            pb.set_style(sty.clone());
-            pb.set_message("todo");
-            let thread = tokio::spawn(async move {
-                if let Err(e) = handle_peer(
-                    &socket_clone,
-                    total_chunks,
-                    file_name_clone,
-                    path_clone,
-                    i,
-                    res_rx,
-                    pb
-                )
-                .await
-                {
-                    eprintln!("Err Sending file to peer, \n{}", e);
+            let total_task = tasks.len();
+            for task in tasks {
+                if let Err(e) = task.await {
+                    println!("Error compelting task, {}", e);
                 }
-            });
-            tasks.push(thread);
-        }
-
-        for task in tasks {
-            if let Err(e) = task.await {
-                println!("Error compelting task, {}", e);
+            }
+            if total_task > 0 {
+                println!("Sending Completed");
             }
         }
-        println!("Sending Completed");
-
         Ok(())
     }
 }
@@ -160,7 +163,7 @@ async fn handle_peer(
     pb: ProgressBar,
 ) -> tokio::io::Result<()> {
     let mut buf = [0; CHUNK_SIZE];
-    
+
     let file = File::open(&path).await?;
     let mut reader = BufReader::new(file);
     let mut index = 1;
@@ -179,7 +182,7 @@ async fn handle_peer(
                 if let Packet::Ack(ack) = pac {
                     if (ack.chunk_index == index + 1) && (addr == receiver_addr) {
                         index += 1;
-                        pb.set_position((index*CHUNK_SIZE) as u64);
+                        pb.set_position((index * CHUNK_SIZE) as u64);
                         n = reader.read(&mut buf).await?;
                     }
                 }

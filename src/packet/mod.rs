@@ -137,8 +137,7 @@ impl BindingPacket {
             print!("Connection req from {} : [y/n] -> ", self.name);
             io::stdout().flush().unwrap();
             let mut res = false;
-            let mut count = 1;
-            loop {
+            for _ in 0..3 {
                 if let Ok(Ok(input)) = timeout(Duration::from_secs(5), res_rx.recv()).await {
                     let ans = input
                         .trim()
@@ -156,19 +155,20 @@ impl BindingPacket {
                             ResetColor
                         )?;
                         break;
-                    } else if ans == 'n'.to_string() || count >= 3 {
-                        execute!(
-                            io::stdout(),
-                            SetForegroundColor(Color::Red),
-                            Print(format!("Connection Denied \n")),
-                            ResetColor
-                        )?;
+                    } else if ans == 'n'.to_string() {
                         break;
                     }
                 }
-                count += 1;
                 print!("Something Went Wrong, \nTry Again: [y/n] -> ");
                 io::stdout().flush().unwrap();
+            }
+            if !res {
+                execute!(
+                    io::stdout(),
+                    SetForegroundColor(Color::Red),
+                    Print(format!("Connection Denied \n")),
+                    ResetColor
+                )?;
             }
             let mut user = user_lock.lock().await;
             user.req_resolve();

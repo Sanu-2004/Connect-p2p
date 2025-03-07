@@ -9,7 +9,10 @@ pub type SenderRes = broadcast::Sender<String>;
 
 use bs58;
 use crossterm::{
-    cursor::MoveTo, execute, style::{Color, Print, ResetColor, SetForegroundColor}, terminal::{Clear, ClearType}
+    cursor::MoveTo,
+    execute,
+    style::{Color, Print, ResetColor, SetForegroundColor},
+    terminal::{Clear, ClearType},
 };
 use packet::Packet;
 use std::{
@@ -18,7 +21,9 @@ use std::{
     sync::Arc,
 };
 use tokio::{
-    net::UdpSocket, signal, sync::{broadcast, Mutex}
+    net::UdpSocket,
+    signal,
+    sync::{broadcast, Mutex},
 };
 use user::User;
 
@@ -88,16 +93,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut buf = [0; 2048];
     loop {
-        let (size, addr) = socket.recv_from(&mut buf).await?;
-        handle_message(
-            &socket,
-            user_lock.clone(),
-            &buf[..size],
-            addr,
-            res_rx.resubscribe(),
-            file_tx.clone(),
-        )
-        .await;
+        match socket.recv_from(&mut buf).await {
+            Ok((size, addr)) => {
+                println!("{}", String::from_utf8_lossy(&buf[..size]));
+                handle_message(
+                    &socket,
+                    user_lock.clone(),
+                    &buf[..size],
+                    addr,
+                    res_rx.resubscribe(),
+                    file_tx.clone(),
+                )
+                .await;
+            },
+            Err(e) => println!("Error reciving msg, {}", e),
+        }
     }
 }
 
@@ -184,7 +194,6 @@ async fn handle_ctrl_c(user_lock: Arc<Mutex<User>>, socket: Arc<UdpSocket>) {
     });
 }
 
-
 fn print_heading() {
     let text = r"   ______                            __             ___       
   / ____/___  ____  ____  ___  _____/ /_      ____ |__ \ ____ 
@@ -196,21 +205,20 @@ fn print_heading() {
 
     let github = "by Sanu-2004 (GitHub)\n\n";
 
-
     let mut stdout = io::stdout();
-    
+
     execute!(
         stdout,
         Clear(ClearType::All),
-        MoveTo(0, 0),         
+        MoveTo(0, 0),
         SetForegroundColor(Color::Green),
-        Print(text), 
+        Print(text),
         ResetColor,
         SetForegroundColor(Color::Yellow),
         Print(github),
         ResetColor,
-    ).unwrap();
+    )
+    .unwrap();
 
     println!();
 }
-
